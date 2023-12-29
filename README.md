@@ -119,7 +119,7 @@ Now the following commands allow you to control the timer.
 Note, when there is no timer active, then [`increase`](#increase-seconds) does nothing.
 So you might want to use the following command as a replacement for [`increase`](#increase-seconds).
 ```
-waybar-timer.sh increase 60 || waybar-timer.sh new 1 'mytimer' 'notify-send "Timer expired."'
+waybar-timer.sh increase 60 || waybar-timer.sh new 1 'notify-send "Timer expired."'
 ```
 It increases the existing timer if it's active, and creates a timer with label
 "mytimer" of lengths 1 minute if there is no timer currently running.
