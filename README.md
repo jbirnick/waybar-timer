@@ -84,10 +84,6 @@ If you want to do some really specific stuff and add some functionality, just ed
 Notation: `<...>` are necessary arguments. `[...=DEFAULTVALUE]` are optional arguments,
 and if you do not specify them their `DEFAULTVALUE` is used.
 
-If want to understand or edit the script, I highly recommend to run a *tail process* (see below) in a terminal window without any bar.
-This way you will see what the bar sees
-and you will understand how the updates work.
-
 The main command of the script is:
 
 - #### `updateandprint`
