@@ -117,8 +117,7 @@ So you might want to use the following command as a replacement for [`increase`]
 ```
 waybar-timer.sh increase 60 || waybar-timer.sh new 1 'notify-send "Timer expired."'
 ```
-It increases the existing timer if it's active, and creates a timer with label
-"mytimer" of lengths 1 minute if there is no timer currently running.
+It increases the existing timer if it's active, and creates a new one minute timer with if there is no timer currently running.
 So now e.g. scrolling up also does something when there is no timer active - it starts a new timer!
 
 ## Known Issues
