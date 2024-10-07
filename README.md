@@ -45,7 +45,7 @@ This script works perfectly **without any dependencies**.
     "return-type": "json",
     "interval": 5,
     "signal": 4,
-    "format": "{icon} {}",
+    "format": "{icon} {0}",
     "format-icons": {
         "standby": "STANDBY",
         "running": "RUNNING",
