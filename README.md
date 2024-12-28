@@ -30,7 +30,7 @@ Use cases: pomodoro timer, self-reminder when next meeting begins, tea/pasta tim
 
 ## Installation
 
-1. [Download the binary](TODO) from the releases (or build it yourself with cargo) and put it in a directory of your choice (e.g. `~/.scripts/`).
+1. Download the binary from the [releases](https://github.com/jbirnick/waybar-timer/releases) (or build it yourself with cargo) and put it in a directory of your choice (e.g. `~/.scripts/`).
 2. Copy-paste the [example configuration](#example-configuration) from below into your waybar config and style it.
 3. Customize. (see [Customization section](#customization))
 
