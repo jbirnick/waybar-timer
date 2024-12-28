@@ -10,15 +10,12 @@ const SOCKET_PATH: &str = "/tmp/waybar_timer.sock";
 //const SOCKET_PATH: &str = "mysocket";
 const INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
-fn send_notification(summary: String, critical: bool) {
+fn send_notification(summary: String) {
     let _ = notify_rust::Notification::new()
         .appname("Waybar Timer")
         .id(12345)
         .summary(&summary)
-        .urgency(match critical {
-            true => notify_rust::Urgency::Critical,
-            false => notify_rust::Urgency::Low,
-        })
+        .urgency(notify_rust::Urgency::Low)
         .show();
 }
 
@@ -40,7 +37,7 @@ impl Error for WorldError {}
 #[serde_dispatch]
 trait World {
     fn cancel(&mut self) -> Result<(), WorldError>;
-    fn start(&mut self, minutes: u32, name: Option<String>) -> Result<(), WorldError>;
+    fn start(&mut self, minutes: u32, command: Option<String>) -> Result<(), WorldError>;
     fn increase(&mut self, seconds: i64) -> Result<(), WorldError>;
     fn togglepause(&mut self) -> Result<(), WorldError>;
 }
@@ -50,11 +47,11 @@ enum Timer {
     Idle,
     Running {
         expiry: OffsetDateTime,
-        name: Option<String>,
+        command: Option<String>,
     },
     Paused {
         time_left: Duration,
-        name: Option<String>,
+        command: Option<String>,
     },
 }
 
@@ -64,15 +61,16 @@ impl Timer {
         let now = OffsetDateTime::now_local().unwrap();
 
         // check if timer expired
-        if let Self::Running { expiry, name } = self {
+        if let Self::Running { expiry, command } = self {
             let time_left = *expiry - now;
             if time_left <= Duration::ZERO {
                 // timer has expired, send notification and set timer to idle
-                let summary = match name {
-                    Some(name) => format!("Timer '{name}' expired"),
-                    None => "Timer expired".into(),
-                };
-                send_notification(summary, true);
+                if let Some(command) = command {
+                    let _ = std::process::Command::new("bash")
+                        .arg("-c")
+                        .arg(command)
+                        .output();
+                }
                 *self = Timer::Idle;
             }
         }
@@ -80,18 +78,15 @@ impl Timer {
         // print new output to stdout (for waybar)
         let (text, alt, tooltip) = match self {
             Self::Idle => (0, "standby", "No timer set".into()),
-            Self::Running { expiry, name } => {
+            Self::Running { expiry, .. } => {
                 let time_left = *expiry - now;
                 let minutes_left = time_left.whole_minutes() + 1;
-                let tooltip = Self::tooltip(name, expiry);
+                let tooltip = Self::tooltip(expiry);
                 (minutes_left, "running", tooltip)
             }
-            Self::Paused { time_left, name } => {
+            Self::Paused { time_left, .. } => {
                 let minutes_left = time_left.whole_minutes() + 1;
-                let tooltip = match name {
-                    Some(name) => format!("Timer '{name}' paused"),
-                    None => "Timer paused".into(),
-                };
+                let tooltip = "Timer paused".into();
                 (minutes_left, "paused", tooltip)
             }
         };
@@ -99,14 +94,10 @@ impl Timer {
         std::io::stdout().flush()
     }
 
-    fn tooltip(name: &Option<String>, expiry: &OffsetDateTime) -> String {
+    fn tooltip(expiry: &OffsetDateTime) -> String {
         let format_desc = time::macros::format_description!("[hour]:[minute]");
         let expiry_str = expiry.format(&format_desc).unwrap();
-
-        match name {
-            Some(name) => format!("Timer '{name}' expires at {expiry_str}"),
-            None => format!("Timer expires at {expiry_str}"),
-        }
+        format!("Timer expires at {expiry_str}")
     }
 }
 
@@ -116,14 +107,14 @@ impl World for Timer {
         Ok(())
     }
 
-    fn start(&mut self, minutes: u32, name: Option<String>) -> Result<(), WorldError> {
+    fn start(&mut self, minutes: u32, command: Option<String>) -> Result<(), WorldError> {
         match self {
             Self::Idle => {
                 let expiry = OffsetDateTime::now_local().unwrap()
                     + Duration::minutes(minutes.into())
                     - Duration::MILLISECOND;
-                send_notification(Self::tooltip(&name, &expiry), false);
-                *self = Self::Running { expiry, name };
+                send_notification(Self::tooltip(&expiry));
+                *self = Self::Running { expiry, command };
                 Ok(())
             }
             Self::Paused { .. } | Self::Running { .. } => Err(WorldError::TimerAlreadyExisting),
@@ -132,12 +123,15 @@ impl World for Timer {
 
     fn increase(&mut self, seconds: i64) -> Result<(), WorldError> {
         match self {
-            Self::Running { expiry, name } => {
+            Self::Running { expiry, .. } => {
                 *expiry += Duration::seconds(seconds);
-                send_notification(Self::tooltip(name, expiry), false);
+                send_notification(Self::tooltip(expiry));
                 Ok(())
             }
-            Self::Paused { time_left, name: _ } => {
+            Self::Paused {
+                time_left,
+                command: _,
+            } => {
                 *time_left += Duration::seconds(seconds);
                 Ok(())
             }
@@ -147,21 +141,21 @@ impl World for Timer {
 
     fn togglepause(&mut self) -> Result<(), WorldError> {
         match self {
-            Self::Running { expiry, name } => {
+            Self::Running { expiry, command } => {
                 let time_left = *expiry - OffsetDateTime::now_local().unwrap();
-                send_notification(Self::tooltip(name, expiry), false);
+                send_notification(Self::tooltip(expiry));
                 *self = Self::Paused {
                     time_left,
-                    name: name.take(),
+                    command: command.take(),
                 };
                 Ok(())
             }
-            Self::Paused { time_left, name } => {
+            Self::Paused { time_left, command } => {
                 let expiry = OffsetDateTime::now_local().unwrap() + *time_left;
-                send_notification(Self::tooltip(name, &expiry), false);
+                send_notification(Self::tooltip(&expiry));
                 *self = Self::Running {
                     expiry,
-                    name: name.take(),
+                    command: command.take(),
                 };
                 Ok(())
             }
@@ -176,7 +170,10 @@ enum Args {
     /// Start a server process (should be from within waybar)
     Tail,
     /// Start a new timer
-    New { minutes: u32, name: Option<String> },
+    New {
+        minutes: u32,
+        command: Option<String>,
+    },
     /// Increase the current timer
     Increase { seconds: u32 },
     /// Decrease the current timer
@@ -194,9 +191,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             run_tail();
             Ok(())
         }
-        Args::New { minutes, name } => {
+        Args::New { minutes, command } => {
             let stream = UnixStream::connect(SOCKET_PATH)?;
-            WorldRPCClient::call_with(&stream, &stream).start(&minutes, &name)??;
+            WorldRPCClient::call_with(&stream, &stream).start(&minutes, &command)??;
             stream.shutdown(std::net::Shutdown::Both)?;
             Ok(())
         }

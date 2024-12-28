@@ -4,7 +4,7 @@
 > This used to be a shell script. Now it is a binary.
 > The CLI arguments have changed only slightly but the underlying architecture is completely different.
 > Therefore, if you switch from the shell script version to the binary, please make sure to **fully adapt the new default config**.
-> In particular you need to remove `interval`, set `exec-on-event` to false, change the actions of your timers to just names (no more actions), and change `increase -60` to `decrease 60`.
+> In particular you need to add `tail` for `exec`, remove `interval`, set `exec-on-event` to false, and change `increase -60` to `decrease 60`.
 
 This script implements a **simple** and **interactive** timer for your bar:
 - e.g. scroll to increase / decrease timer
@@ -47,10 +47,10 @@ Use cases: pomodoro timer, self-reminder when next meeting begins, tea/pasta tim
         "running": "RUNNING",
         "paused": "PAUSE"
     },
-    "on-click": "/path/to/waybar-timer new 25 Pomodoro",
+    "on-click": "/path/to/waybar-timer new 25 'notify-send \"Session finished\"'",
     "on-click-middle": "/path/to/waybar-timer cancel",
     "on-click-right": "/path/to/waybar-timer togglepause",
-    "on-scroll-up": "/path/to/waybar-timer increase 60 || /path/to/waybar-timer new 1",
+    "on-scroll-up": "/path/to/waybar-timer increase 60 || /path/to/waybar-timer new 'notify-send -u critical \"Timer expired\"'",
     "on-scroll-down": "/path/to/waybar-timer decrease 60"
 }
 ```
@@ -87,8 +87,9 @@ The main command of the script is:
 
 Now the following commands allow you to control the timer.
 
-- #### `new <MINUTES> [NAME]`
+- #### `new <MINUTES> [COMMAND]`
   Creates a new timer of length `MINUTES` minutes.
+  If you specify `COMMAND`, it will be executed (within a bash shell) when the timer finishes.
 
 - #### `increase <SECONDS>`
   Extend the current timer by `SECONDS` seconds.
@@ -101,6 +102,7 @@ Now the following commands allow you to control the timer.
 
 - #### `cancel`
   Cancel the current timer.
+  The specified `COMMAND` will _not_ be executed.
 
 ## Tips & Tricks
 
@@ -108,7 +110,7 @@ When there is no timer active, then [`increase`](#increase-seconds) does nothing
 However, you might want it to _start a new timer_.
 You can implement this because `increase` will exit with code 1 when there is no current timer, so you can do:
 ```
-waybar-timer increase 60 || waybar-timer new 1'
+waybar-timer increase 60 || waybar-timer new 1 'notify-send "Timer expired."'
 ```
 Then if there is an existing timer it gets increased, otherwise a new one minute timer is created.
 This is also implemented in the [example configuration](#example-configuration).
