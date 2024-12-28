@@ -50,7 +50,7 @@ Use cases: pomodoro timer, self-reminder when next meeting begins, tea/pasta tim
     "on-click": "/path/to/waybar-timer new 25 'notify-send \"Session finished\"'",
     "on-click-middle": "/path/to/waybar-timer cancel",
     "on-click-right": "/path/to/waybar-timer togglepause",
-    "on-scroll-up": "/path/to/waybar-timer increase 60 || /path/to/waybar-timer new 'notify-send -u critical \"Timer expired\"'",
+    "on-scroll-up": "/path/to/waybar-timer increase 60 || /path/to/waybar-timer new 1 'notify-send -u critical \"Timer expired\"'",
     "on-scroll-down": "/path/to/waybar-timer decrease 60"
 }
 ```
