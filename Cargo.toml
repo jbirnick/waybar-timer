@@ -3,6 +3,11 @@ name = "waybar_timer"
 version = "0.1.0"
 edition = "2021"
 
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
 [dependencies]
 serde_dispatch = { git = "https://github.com/jbirnick/serde-dispatch" }
 clap = { version = "4.5", features = ["derive"] }
