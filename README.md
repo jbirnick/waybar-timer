@@ -38,7 +38,7 @@ Use cases: pomodoro timer, self-reminder when next meeting begins, tea/pasta tim
 
 ```json
 "custom/timer": {
-    "exec": "/path/to/waybar-timer tail",
+    "exec": "/path/to/waybar_timer tail",
     "exec-on-event": false,
     "return-type": "json",
     "format": "{icon} {0}",
@@ -47,11 +47,11 @@ Use cases: pomodoro timer, self-reminder when next meeting begins, tea/pasta tim
         "running": "RUNNING",
         "paused": "PAUSE"
     },
-    "on-click": "/path/to/waybar-timer new 25 'notify-send \"Session finished\"'",
-    "on-click-middle": "/path/to/waybar-timer cancel",
-    "on-click-right": "/path/to/waybar-timer togglepause",
-    "on-scroll-up": "/path/to/waybar-timer increase 60 || /path/to/waybar-timer new 1 'notify-send -u critical \"Timer expired\"'",
-    "on-scroll-down": "/path/to/waybar-timer decrease 60"
+    "on-click": "/path/to/waybar_timer new 25 'notify-send \"Session finished\"'",
+    "on-click-middle": "/path/to/waybar_timer cancel",
+    "on-click-right": "/path/to/waybar_timer togglepause",
+    "on-scroll-up": "/path/to/waybar_timer increase 60 || /path/to/waybar_timer new 1 'notify-send -u critical \"Timer expired\"'",
+    "on-scroll-down": "/path/to/waybar_timer decrease 60"
 }
 ```
 The first modification you probably want to make is to replace the `format-icons` by some actually stylish icons.
