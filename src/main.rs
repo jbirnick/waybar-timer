@@ -7,7 +7,6 @@ use std::sync::{Arc, Mutex};
 use time::{Duration, OffsetDateTime};
 
 const SOCKET_PATH: &str = "/tmp/waybar_timer.sock";
-//const SOCKET_PATH: &str = "mysocket";
 const INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
 fn send_notification(summary: String) {
@@ -103,6 +102,10 @@ impl Timer {
 
 impl World for Timer {
     fn cancel(&mut self) -> Result<(), WorldError> {
+        match self {
+            Self::Idle => {}
+            _ => send_notification("Timer canceled".into()),
+        };
         *self = Self::Idle;
         Ok(())
     }
@@ -143,7 +146,7 @@ impl World for Timer {
         match self {
             Self::Running { expiry, command } => {
                 let time_left = *expiry - OffsetDateTime::now_local().unwrap();
-                send_notification(Self::tooltip(expiry));
+                send_notification("Timer paused".into());
                 *self = Self::Paused {
                     time_left,
                     command: command.take(),
