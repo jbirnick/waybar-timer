@@ -6,7 +6,8 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::{Arc, Mutex};
 use time::{Duration, OffsetDateTime};
 
-const SOCKET_PATH: &str = "/tmp/waybar_timer.sock";
+const SOCKET_PATH_COMMANDS: &str = "/tmp/waybar_timer_commands.sock";
+const SOCKET_PATH_UPDATES: &str = "/tmp/waybar_timer_updates.sock";
 const INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
 fn send_notification(summary: String) {
@@ -55,8 +56,8 @@ enum Timer {
 }
 
 impl Timer {
-    /// update routine which is called regularly and on every change of the timer
-    fn update(&mut self) -> std::io::Result<()> {
+    /// updates timer, potentially executes action, and returns formatted string for waybar
+    fn update(&mut self) -> String {
         let now = OffsetDateTime::now_local().unwrap();
 
         // check if timer expired
@@ -89,8 +90,7 @@ impl Timer {
                 (minutes_left, "paused", tooltip)
             }
         };
-        println!("{{\"text\": \"{text}\", \"alt\": \"{alt}\", \"tooltip\": \"{tooltip}\", \"class\": \"timer\"}}");
-        std::io::stdout().flush()
+        format!("{{\"text\": \"{text}\", \"alt\": \"{alt}\", \"tooltip\": \"{tooltip}\", \"class\": \"timer\"}}")
     }
 
     fn tooltip(expiry: &OffsetDateTime) -> String {
@@ -170,8 +170,10 @@ impl World for Timer {
 /// Waybar Timer (see https://github.com/jbirnick/waybar-timer/)
 #[derive(Parser)]
 enum Args {
-    /// Start a server process (should be from within waybar)
-    Tail,
+    /// Serve a timer API (should be called once at compositor startup)
+    Serve,
+    /// Keep reading the latest status of the timer (should be called by waybar)
+    Hook,
     /// Start a new timer
     New {
         minutes: u32,
@@ -187,79 +189,142 @@ enum Args {
     Cancel,
 }
 
+struct ServerState {
+    timer: Timer,
+    subs: Vec<UnixStream>,
+}
+
+impl ServerState {
+    fn update(&mut self) {
+        // update timer and get waybar string
+        let message = self.timer.update();
+
+        // broadcast it to subscribers
+        let mut i: usize = 0;
+        loop {
+            if i == self.subs.len() {
+                break;
+            }
+            match writeln!(self.subs[i], "{}", message) {
+                Ok(()) => {
+                    let _ = self.subs[i].flush();
+                    i += 1;
+                }
+                Err(err) => {
+                    println!("couldn't write to subscriber stream: {}", err);
+                    println!("will drop the subscriber");
+                    self.subs.swap_remove(i);
+                }
+            }
+        }
+    }
+}
+
+fn run_serve() {
+    let state = Arc::new(Mutex::new(ServerState {
+        timer: Timer::Idle,
+        subs: Vec::new(),
+    }));
+
+    // spawn a thread which is responsible for calling update in a regular interval
+    let state_thread_interval = state.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(INTERVAL);
+        let mut state = state_thread_interval.lock().unwrap();
+        state.update();
+    });
+
+    // spawn a thread which is responsible for accepting new subscribers
+    let state_thread_subaccept = state.clone();
+    std::thread::spawn(move || {
+        // NOTE: binding is not possible if the file already exists, that's why we delete it first
+        // this leads to undefined behavior when there is already a tail process running
+        // maybe would be better to instead remove the file when program exits
+        let _ = std::fs::remove_file(SOCKET_PATH_UPDATES);
+        let listener = UnixListener::bind(SOCKET_PATH_UPDATES).unwrap();
+        for stream in listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    // put to list of subscribers and trigger update so that
+                    // the new subscriber gets the current state
+                    let mut state = state_thread_subaccept.lock().unwrap();
+                    stream.shutdown(std::net::Shutdown::Read).unwrap();
+                    state.subs.push(stream);
+                    state.update();
+                }
+                Err(err) => {
+                    panic!("{err}")
+                }
+            }
+        }
+    });
+
+    // the main thread handles handle requests from the CLI
+    // NOTE: binding is not possible if the file already exists, that's why we delete it first
+    // this leads to undefined behavior when there is already a tail process running
+    // maybe would be better to instead remove the file when program exits
+    let _ = std::fs::remove_file(SOCKET_PATH_COMMANDS);
+    let listener = UnixListener::bind(SOCKET_PATH_COMMANDS).unwrap();
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                // handles a single remote procedure call
+                let mut state = state.lock().unwrap();
+                state.timer.handle_with(&stream, &stream).unwrap();
+                stream.shutdown(std::net::Shutdown::Both).unwrap();
+                state.update();
+            }
+            Err(err) => {
+                panic!("{err}")
+            }
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     match args {
-        Args::Tail => {
-            run_tail();
+        Args::Serve => {
+            run_serve();
+            Ok(())
+        }
+        Args::Hook => {
+            let mut stream = UnixStream::connect(SOCKET_PATH_UPDATES)?;
+            stream.shutdown(std::net::Shutdown::Write)?;
+            let mut stdout = std::io::stdout();
+            std::io::copy(&mut stream, &mut stdout)?;
             Ok(())
         }
         Args::New { minutes, command } => {
-            let stream = UnixStream::connect(SOCKET_PATH)?;
+            let stream = UnixStream::connect(SOCKET_PATH_COMMANDS)?;
             WorldRPCClient::call_with(&stream, &stream).start(&minutes, &command)??;
             stream.shutdown(std::net::Shutdown::Both)?;
             Ok(())
         }
         Args::Increase { seconds } => {
-            let stream = UnixStream::connect(SOCKET_PATH)?;
+            let stream = UnixStream::connect(SOCKET_PATH_COMMANDS)?;
             WorldRPCClient::call_with(&stream, &stream).increase(&seconds.into())??;
             stream.shutdown(std::net::Shutdown::Both)?;
             Ok(())
         }
         Args::Decrease { seconds } => {
             let seconds: i64 = seconds.into();
-            let stream = UnixStream::connect(SOCKET_PATH)?;
+            let stream = UnixStream::connect(SOCKET_PATH_COMMANDS)?;
             WorldRPCClient::call_with(&stream, &stream).increase(&-seconds)??;
             stream.shutdown(std::net::Shutdown::Both)?;
             Ok(())
         }
         Args::Togglepause => {
-            let stream = UnixStream::connect(SOCKET_PATH)?;
+            let stream = UnixStream::connect(SOCKET_PATH_COMMANDS)?;
             WorldRPCClient::call_with(&stream, &stream).togglepause()??;
             stream.shutdown(std::net::Shutdown::Both)?;
             Ok(())
         }
         Args::Cancel => {
-            let stream = UnixStream::connect(SOCKET_PATH)?;
+            let stream = UnixStream::connect(SOCKET_PATH_COMMANDS)?;
             WorldRPCClient::call_with(&stream, &stream).cancel()??;
             stream.shutdown(std::net::Shutdown::Both)?;
             Ok(())
-        }
-    }
-}
-
-fn run_tail() {
-    let timer = Arc::new(Mutex::new(Timer::Idle));
-    {
-        let mut timer = timer.lock().unwrap();
-        timer.update().unwrap();
-    }
-
-    let timer_thread = timer.clone();
-    std::thread::spawn(move || loop {
-        std::thread::sleep(INTERVAL);
-        let mut timer = timer_thread.lock().unwrap();
-        timer.update().unwrap();
-    });
-
-    // handle requests from the CLI
-    // NOTE: binding is not possible if the file already exists, that's why we delete it first
-    // this leads to undefined behavior when there is already a tail process running
-    // maybe would be better to instead remove the file when program exits
-    let _ = std::fs::remove_file(SOCKET_PATH);
-    let listener = UnixListener::bind(SOCKET_PATH).unwrap();
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                // handles a single remote procedure call
-                let mut timer = timer.lock().unwrap();
-                timer.handle_with(&stream, &stream).unwrap();
-                stream.shutdown(std::net::Shutdown::Both).unwrap();
-                timer.update().unwrap();
-            }
-            Err(err) => {
-                panic!("{err}")
-            }
         }
     }
 }

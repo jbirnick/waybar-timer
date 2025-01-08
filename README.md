@@ -4,7 +4,8 @@
 > This used to be a shell script. Now it is a binary.
 > The CLI arguments have changed only slightly but the underlying architecture is completely different.
 > Therefore, if you switch from the shell script version to the binary, please make sure to **fully adapt the new default config**.
-> In particular you need to add `tail` for `exec`, remove `interval`, set `exec-on-event` to false, and change `increase -60` to `decrease 60`.
+> In particular, you need to add `hook` for `exec`, remove `interval`, set `exec-on-event` to false, and change `increase -60` to `decrease 60`.
+> You also need to start a waybar-timer server _before_ you start waybar.
 
 This script implements a **simple** and **interactive** timer for your bar:
 - e.g. scroll to increase / decrease timer
@@ -31,14 +32,15 @@ Use cases: pomodoro timer, self-reminder when next meeting begins, tea/pasta tim
 ## Installation
 
 1. Download the binary from the [releases](https://github.com/jbirnick/waybar-timer/releases) (or build it yourself with cargo) and put it in a directory of your choice (e.g. `~/.scripts/`).
-2. Copy-paste the [example configuration](#example-configuration) from below into your waybar config and style it.
-3. Customize. (see [Customization section](#customization))
+2. In the startup script of your compositor, run `/path/to/waybar_timer serve` and make sure it starts **before waybar starts**.
+3. Copy-paste the [example configuration](#example-configuration) from below into your waybar config and style it.
+4. Customize. (see [Customization section](#customization))
 
 ## Example Configuration
 
 ```json
 "custom/timer": {
-    "exec": "/path/to/waybar_timer tail",
+    "exec": "/path/to/waybar_timer hook",
     "exec-on-event": false,
     "return-type": "json",
     "format": "{icon} {0}",
@@ -78,12 +80,17 @@ If you need a specific functionality feel free to open an issue and maybe we can
 
 Notation: `<...>` are necessary arguments and `[...]` are optional arguments.
 
-The main command of the script is:
+The main commands of the script are :
 
-- #### `tail`
+- #### `serve`
+  This is the command you want to put in the startup script of your compositor.
+  Make sure you start this server _before_ you start waybar.
+  It keeps the state of the timer and provides updates to all the clients who call `hook`.
+
+- #### `hook`
   This is the command which you want to put in your waybar `exec` field.
-  It keeps the state of the timer and regularly outputs it in JSON, so that waybar can render it.
-  We will call the process which runs this `tail` routine the *tail process*.
+  It subscribes to the server to get all the updates of the timer.
+  Updates are delivered as JSON which is readable by waybar.
 
 Now the following commands allow you to control the timer.
 
@@ -112,6 +119,6 @@ You can implement this because `increase` will exit with code 1 when there is no
 ```
 waybar-timer increase 60 || waybar-timer new 1 'notify-send "Timer expired."'
 ```
-Then if there is an existing timer it gets increased, otherwise a new one minute timer is created.
+Then, if there is an existing timer it gets increased, otherwise a new one minute timer is created.
 This is also implemented in the [example configuration](#example-configuration).
 Just try to scroll up when there is no timer running!
