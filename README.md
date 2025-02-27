@@ -113,12 +113,18 @@ Now the following commands allow you to control the timer.
 
 ## Tips & Tricks
 
-When there is no timer active, then [`increase`](#increase-seconds) does nothing, i.e. it doesn't change the state of the timer.
-However, you might want it to _start a new timer_.
-You can implement this because `increase` will exit with code 1 when there is no current timer, so you can do:
-```
-waybar-timer increase 60 || waybar-timer new 1 'notify-send "Timer expired."'
-```
-Then, if there is an existing timer it gets increased, otherwise a new one minute timer is created.
-This is also implemented in the [example configuration](#example-configuration).
-Just try to scroll up when there is no timer running!
+> [!TIP]
+> When there is no timer active, then [`increase`](#increase-seconds) does nothing, i.e. it doesn't change the state of the timer.
+> However, you might want it to _start a new timer_.
+> You can implement this because `increase` will exit with code 1 when there is no current timer, so you can do:
+> ```
+> waybar-timer increase 60 || waybar-timer new 1 'notify-send "Timer expired."'
+> ```
+> Then, if there is an existing timer it gets increased, otherwise a new one minute timer is created.
+> This is also implemented in the [example configuration](#example-configuration).
+> Just try to scroll up when there is no timer running!
+
+> [!CAUTION]
+> Some people use `pkill` to send signals to `waybar`, in order to update some modules.
+> But the process name given to `pkill` is matched as a regex, so using `pkill waybar` will _also_ match `waybar_timer` and kill it.
+> **So to send signals to waybar, you should use `pkill -x waybar`.**
