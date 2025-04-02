@@ -259,7 +259,7 @@ fn run_serve() {
         }
     });
 
-    // the main thread handles handle requests from the CLI
+    // the main thread handles requests from the CLI
     // NOTE: binding is not possible if the file already exists, that's why we delete it first
     // this leads to undefined behavior when there is already a tail process running
     // maybe would be better to instead remove the file when program exits
