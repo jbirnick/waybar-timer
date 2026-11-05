@@ -58,13 +58,16 @@ Use cases: pomodoro timer, self-reminder when next meeting begins, tea/pasta tim
 ```
 The first modification you probably want to make is to replace the `format-icons` by some actually stylish icons.
 
-Furthermore you can style the module using the `timer` class, for example:
-```
-.timer {
+Furthermore you can style the module using the `timer-*` classes, for example:
+```css
+.timer-running, .timer-paused, .timer-standby {
     background-color: #ffee82;
     color: #242424;
     margin: 0 10px;
     padding: 0 10px;
+}
+.timer-running {
+    background-color: #ff0000;
 }
 ```
 

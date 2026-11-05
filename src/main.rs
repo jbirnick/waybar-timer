@@ -94,7 +94,7 @@ impl Timer {
                 (minutes_left, "paused", tooltip)
             }
         };
-        format!("{{\"text\": \"{text}\", \"alt\": \"{alt}\", \"tooltip\": \"{tooltip}\", \"class\": \"timer\"}}")
+        format!("{{\"text\": \"{text}\", \"alt\": \"{alt}\", \"tooltip\": \"{tooltip}\", \"class\": \"timer-{alt}\"}}")
     }
 
     fn tooltip(expiry: &OffsetDateTime) -> String {
